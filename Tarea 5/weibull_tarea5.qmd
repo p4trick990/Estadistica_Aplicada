@@ -1,0 +1,416 @@
+---
+title: "Distribución Weibull"
+lang: es
+---
+
+```{=html}
+<style>
+main.content {
+text-align: justify}
+</style>
+```
+
+```{r}
+#| label: setup
+#| echo: false
+#| message: false
+#| warning: false
+
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(knitr)
+library(kableExtra)
+library(RColorBrewer)
+library(plotly)
+library(scales)
+library(viridis)
+
+```
+
+La **distribución Weibull** es un modelo continuo para variables positivas que se utiliza principalmente en **confiabilidad** y **análisis de supervivencia**, para describir el tiempo de vida de un componente o el tiempo hasta que ocurre una falla. También aparece en meteorología, donde se usa para modelar la velocidad del viento. Su flexibilidad proviene del parámetro de forma, que permite representar riesgos de falla que disminuyen, permanecen constantes o aumentan con el tiempo.
+
+::: {#def-weibull}
+Una variable aleatoria continua $X$ tiene **distribución Weibull** con parámetros $\alpha > 0$ y $\lambda > 0$, lo que se denota $X \sim \text{Weibull}(\alpha, \lambda)$, si su función de densidad es
+
+\begin{equation}
+f(x) = \begin{cases}
+\lambda \alpha (\lambda x)^{\alpha - 1} e^{-(\lambda x)^{\alpha}} & \text{si } x > 0, \\
+0 & \text{si } x \leq 0.
+\end{cases}
+\end{equation}
+:::
+
+**Parámetros**
+
+- $\alpha > 0$: **parámetro de forma**; determina el aspecto de la curva.
+- $\lambda > 0$: **parámetro de escala**; al aumentar, la distribución se comprime hacia valores pequeños.
+
+En R, las funciones `dweibull()`, `pweibull()`, `qweibull()` y `rweibull()` usan los argumentos `shape` $= \alpha$ y `scale` $= 1/\lambda$.
+
+**Casos particulares**
+
+- Con $\alpha = 1$ la densidad se reduce a $f(x) = \lambda e^{-\lambda x}$, es decir, $\text{Weibull}(1, \lambda) = \text{exp}(\lambda)$.
+- Con $\alpha = 2$ se obtiene la distribución de Rayleigh.
+
+**Interpretación de $\alpha$ como tiempo de vida**
+
+- Si $\alpha < 1$, el riesgo de falla disminuye con el tiempo (fallas tempranas o "mortalidad infantil").
+- Si $\alpha = 1$, el riesgo de falla es constante (caso exponencial, sin memoria).
+- Si $\alpha > 1$, el riesgo de falla aumenta con el tiempo (desgaste o envejecimiento).
+
+## Función de densidad
+
+### Efecto del parámetro de forma $\alpha$ (con $\lambda = 1$)
+
+```{r}
+#| label: pdf-alpha
+#| fig-align: center
+
+x_w <- seq(0.005, 3, length.out = 600)
+alphas_w <- c(0.6, 1, 1.5, 2.5, 4)
+
+pdf_alpha <- do.call(rbind, lapply(alphas_w, function(a) {
+  data.frame(x = x_w, y = dweibull(x_w, shape = a, scale = 1), param = paste("α =", a))
+}))
+pdf_alpha$param <- factor(pdf_alpha$param, levels = paste("α =", alphas_w))
+
+graf_pdf_alpha <- ggplot(pdf_alpha, aes(x = x, y = y, color = param)) +
+  geom_line(linewidth = 1.2) +
+  scale_color_manual(values = c("#FF5714", "#0B3954", "#1BE7FF", "#0A9396", "#E0A800")) +
+  coord_cartesian(ylim = c(0, 1.8)) +
+  labs(title = "Densidad Weibull: efecto de α (λ = 1)",
+       x = "x", y = "f(x)", color = "Parámetro") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+ggplotly(graf_pdf_alpha)
+```
+
+Para $\alpha < 1$ la densidad es decreciente y no está acotada cerca de 0; con $\alpha = 1$ coincide con la exponencial; y para $\alpha > 1$ la densidad vale 0 en el origen, crece hasta una moda y después decrece. Al aumentar $\alpha$ la curva se vuelve más concentrada y más simétrica.
+
+### Efecto del parámetro de escala $\lambda$ (con $\alpha = 1.5$)
+
+```{r}
+#| label: pdf-lambda
+#| fig-align: center
+
+x_l <- seq(0, 5, length.out = 600)
+lambdas_w <- c(0.5, 1, 2, 4)
+
+pdf_lambda <- do.call(rbind, lapply(lambdas_w, function(l) {
+  data.frame(x = x_l, y = dweibull(x_l, shape = 1.5, scale = 1 / l), param = paste("λ =", l))
+}))
+pdf_lambda$param <- factor(pdf_lambda$param, levels = paste("λ =", lambdas_w))
+
+graf_pdf_lambda <- ggplot(pdf_lambda, aes(x = x, y = y, color = param)) +
+  geom_line(linewidth = 1.2) +
+  scale_color_manual(values = c("#0B3954", "#0A9396", "#FF5714", "#E0A800")) +
+  labs(title = "Densidad Weibull: efecto de λ (α = 1.5)",
+       x = "x", y = "f(x)", color = "Parámetro") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+ggplotly(graf_pdf_lambda)
+```
+
+Cambiar $\lambda$ no altera la forma de la curva, solo su escala: al duplicar $\lambda$ los valores típicos se reducen a la mitad y la densidad se vuelve el doble de alta.
+
+## Función de distribución
+
+Para $x > 0$, con el cambio de variable $u = (\lambda t)^{\alpha}$, de modo que $du = \lambda \alpha (\lambda t)^{\alpha - 1} dt$:
+
+\begin{equation}
+F(x) = \int_0^x \lambda \alpha (\lambda t)^{\alpha - 1} e^{-(\lambda t)^{\alpha}}\, dt = \int_0^{(\lambda x)^{\alpha}} e^{-u}\, du = 1 - e^{-(\lambda x)^{\alpha}}.
+\end{equation}
+
+Por lo tanto,
+
+\begin{equation}
+F(x) = \begin{cases}
+0 & \text{si } x \leq 0, \\
+1 - e^{-(\lambda x)^{\alpha}} & \text{si } x > 0.
+\end{cases}
+\end{equation}
+
+Una consecuencia útil es la función de supervivencia $P(X > x) = e^{-(\lambda x)^{\alpha}}$, y que la función de distribución tiene inversa explícita, lo que facilita la simulación.
+
+```{r}
+#| label: cdf-weibull
+#| fig-align: center
+#| fig-width: 10
+#| fig-height: 4.5
+
+cdf_alpha <- do.call(rbind, lapply(alphas_w, function(a) {
+  data.frame(x = x_w, y = pweibull(x_w, shape = a, scale = 1), param = paste("α =", a))
+}))
+cdf_alpha$param <- factor(cdf_alpha$param, levels = paste("α =", alphas_w))
+
+cdf_lambda <- do.call(rbind, lapply(lambdas_w, function(l) {
+  data.frame(x = x_l, y = pweibull(x_l, shape = 1.5, scale = 1 / l), param = paste("λ =", l))
+}))
+cdf_lambda$param <- factor(cdf_lambda$param, levels = paste("λ =", lambdas_w))
+
+g_cdf_a <- ggplot(cdf_alpha, aes(x = x, y = y, color = param)) +
+  geom_line(linewidth = 1.1) +
+  geom_point(aes(x = 1, y = 1 - exp(-1)), color = "#0B3954", size = 2.5, inherit.aes = FALSE) +
+  scale_color_manual(values = c("#FF5714", "#0B3954", "#1BE7FF", "#0A9396", "#E0A800")) +
+  labs(title = "Efecto de α (λ = 1)", x = "x", y = "F(x)", color = "") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"), legend.position = "bottom")
+
+g_cdf_l <- ggplot(cdf_lambda, aes(x = x, y = y, color = param)) +
+  geom_line(linewidth = 1.1) +
+  scale_color_manual(values = c("#0B3954", "#0A9396", "#FF5714", "#E0A800")) +
+  labs(title = "Efecto de λ (α = 1.5)", x = "x", y = "F(x)", color = "") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"), legend.position = "bottom")
+
+grid.arrange(g_cdf_a, g_cdf_l, ncol = 2)
+```
+
+Con $\lambda = 1$, todas las funciones de distribución pasan por el punto $(1,\ 1 - e^{-1}) \approx (1,\ 0.632)$, sin importar $\alpha$; en general, $x = 1/\lambda$ es el cuantil 0.632 de cualquier Weibull. Valores grandes de $\alpha$ producen un crecimiento abrupto alrededor de ese punto, mientras que al aumentar $\lambda$ la curva alcanza el valor 1 más rápidamente.
+
+## Características de la distribución
+
+**Media.** Con el cambio $u = (\lambda x)^{\alpha}$, es decir $x = u^{1/\alpha}/\lambda$ y $dx = \frac{1}{\alpha\lambda} u^{1/\alpha - 1} du$:
+
+\begin{equation}
+E(X) = \int_0^{\infty} x\, \lambda \alpha (\lambda x)^{\alpha - 1} e^{-(\lambda x)^{\alpha}}\, dx = \frac{1}{\lambda}\int_0^{\infty} u^{1/\alpha} e^{-u}\, du = \frac{1}{\lambda}\,\Gamma\!\left(1 + \frac{1}{\alpha}\right).
+\end{equation}
+
+**Varianza.** Análogamente, $E(X^2) = \frac{1}{\lambda^2}\Gamma\!\left(1 + \frac{2}{\alpha}\right)$, de donde
+
+\begin{equation}
+\text{Var}(X) = \frac{1}{\lambda^2}\left[\Gamma\!\left(1 + \frac{2}{\alpha}\right) - \Gamma^2\!\left(1 + \frac{1}{\alpha}\right)\right].
+\end{equation}
+
+**Moda.** Derivando la densidad, $f'(x) = 0$ equivale a $(\alpha - 1) - \alpha(\lambda x)^{\alpha} = 0$, por lo que
+
+\begin{equation}
+\text{Moda} = \begin{cases}
+\dfrac{1}{\lambda}\left(\dfrac{\alpha - 1}{\alpha}\right)^{1/\alpha} & \text{si } \alpha > 1, \\[2mm]
+0 & \text{si } \alpha \leq 1.
+\end{cases}
+\end{equation}
+
+**Coeficiente de variación.**
+
+\begin{equation}
+CV = \frac{\sigma}{\mu} = \frac{\sqrt{\Gamma\!\left(1 + \frac{2}{\alpha}\right) - \Gamma^2\!\left(1 + \frac{1}{\alpha}\right)}}{\Gamma\!\left(1 + \frac{1}{\alpha}\right)},
+\end{equation}
+
+que no depende de $\lambda$, sino únicamente del parámetro de forma.
+
+```{r}
+#| label: tabla-caracteristicas
+
+caract_weibull <- function(a, l) {
+  g1 <- gamma(1 + 1 / a)
+  g2 <- gamma(1 + 2 / a)
+  c(Media = g1 / l,
+    Varianza = (g2 - g1^2) / l^2,
+    Moda = if (a > 1) (1 / l) * ((a - 1) / a)^(1 / a) else 0,
+    CV = sqrt(g2 - g1^2) / g1)
+}
+
+combos_w <- expand.grid(alpha = c(0.6, 1, 1.5, 2.5, 4), lambda = c(1, 2))
+tabla_car <- cbind(combos_w, t(mapply(caract_weibull, combos_w$alpha, combos_w$lambda)))
+tabla_car <- tabla_car[order(tabla_car$alpha, tabla_car$lambda), ]
+
+kable(tabla_car, digits = 4, row.names = FALSE,
+      caption = "Media, varianza, moda y coeficiente de variación de la Weibull",
+      col.names = c("α", "λ", "Media", "Varianza", "Moda", "CV")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+```{r}
+#| label: cv-alpha
+#| fig-align: center
+
+alpha_seq <- seq(0.4, 6, by = 0.02)
+cv_df <- data.frame(alpha = alpha_seq,
+                    CV = sapply(alpha_seq, function(a) caract_weibull(a, 1)["CV"]))
+
+ggplot(cv_df, aes(x = alpha, y = CV)) +
+  geom_line(color = "#FF5714", linewidth = 1.3) +
+  geom_point(data = data.frame(alpha = 1, CV = 1), color = "#0B3954", size = 3.5) +
+  annotate("text", x = 1.35, y = 1.15, label = "α = 1 (exponencial): CV = 1",
+           hjust = 0, color = "#0B3954") +
+  labs(title = "Coeficiente de variación de la Weibull en función de α",
+       x = "α", y = "CV") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+```
+
+El coeficiente de variación decrece al aumentar $\alpha$: vale 1 en el caso exponencial, es mayor que 1 cuando $\alpha < 1$ y se hace pequeño cuando $\alpha$ es grande, lo que indica tiempos de vida cada vez más concentrados alrededor de la media. Por otro lado, al duplicar $\lambda$ la media y la moda se reducen a la mitad y la varianza a la cuarta parte, mientras que el CV no cambia.
+
+## Ejemplo con valores simulados
+
+Supóngase que la velocidad del viento (en m/s) en cierto sitio sigue una distribución $\text{Weibull}(\alpha = 2.5, \lambda = 0.2)$. Sus valores teóricos son
+
+$$E(X) = \frac{\Gamma(1.4)}{0.2} \approx 4.4363, \qquad \text{Var}(X) = \frac{\Gamma(1.8) - \Gamma^2(1.4)}{0.2^2} \approx 3.6036,$$
+
+$$\text{Moda} = 5\left(\frac{1.5}{2.5}\right)^{1/2.5} \approx 4.0760, \qquad CV \approx 0.4279.$$
+
+Se simulan 5000 velocidades de dos maneras: con `rweibull()` y con el **método de la transformada inversa**. Igualando $U = F(X)$ con $U \sim \text{unif}(0, 1)$ y despejando, se obtiene
+
+$$X = \frac{1}{\lambda}\left[-\ln(1 - U)\right]^{1/\alpha}.$$
+
+```{r}
+#| label: ejemplo-simulacion
+
+set.seed(2026)
+
+a_v <- 2.5
+l_v <- 0.2
+n_v <- 5000
+
+viento_r <- rweibull(n_v, shape = a_v, scale = 1 / l_v)
+u_v <- runif(n_v)
+viento_inv <- (1 / l_v) * (-log(1 - u_v))^(1 / a_v)
+
+teo_v <- caract_weibull(a_v, l_v)
+
+moda_empirica <- function(v) {
+  d <- density(v)
+  d$x[which.max(d$y)]
+}
+
+resumen_viento <- data.frame(
+  Medida = c("Media", "Varianza", "Moda", "CV", "P(X > 8)"),
+  Teorica = c(unname(teo_v), exp(-(l_v * 8)^a_v)),
+  rweibull = c(mean(viento_r), var(viento_r), moda_empirica(viento_r),
+               sd(viento_r) / mean(viento_r), mean(viento_r > 8)),
+  Inversa = c(mean(viento_inv), var(viento_inv), moda_empirica(viento_inv),
+              sd(viento_inv) / mean(viento_inv), mean(viento_inv > 8))
+)
+
+kable(resumen_viento, digits = 4, row.names = FALSE,
+      caption = "Weibull(2.5, 0.2): valores teóricos vs simulados",
+      col.names = c("Medida", "Teórica", "Simulada (rweibull)", "Simulada (inversa)")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+Ambos métodos de simulación producen una media, una varianza, un CV y una probabilidad de que el viento supere los 8 m/s muy cercanos a los teóricos. La moda simulada se estima como el punto más alto de una densidad suavizada de la muestra, por lo que es la medida menos precisa: puede alejarse algunas décimas del valor teórico dependiendo del suavizado y de la muestra.
+
+```{r}
+#| label: ejemplo-histograma
+#| fig-align: center
+#| fig-width: 10
+#| fig-height: 4.5
+
+datos_viento <- rbind(
+  data.frame(valor = viento_r, metodo = "rweibull()"),
+  data.frame(valor = viento_inv, metodo = "Transformada inversa")
+)
+
+ggplot(datos_viento, aes(x = valor)) +
+  geom_histogram(aes(y = after_stat(density)), binwidth = 0.5, boundary = 0,
+                 fill = "#FFD23F", color = "#0B3954") +
+  stat_function(fun = dweibull, args = list(shape = a_v, scale = 1 / l_v),
+                color = "#FF5714", linewidth = 1.3, n = 500) +
+  geom_vline(xintercept = teo_v["Media"], color = "#0B3954", linetype = "dashed", linewidth = 1) +
+  geom_vline(xintercept = teo_v["Moda"], color = "#0A9396", linetype = "dashed", linewidth = 1) +
+  facet_wrap(~metodo) +
+  labs(title = "Velocidad del viento simulada: Weibull(2.5, 0.2)",
+       subtitle = "Curva: densidad teórica | Azul tinta: media | Turquesa: moda",
+       x = "Velocidad (m/s)", y = "Densidad") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+Los dos histogramas reproducen la densidad teórica. La moda (4.08 m/s) queda a la izquierda de la media (4.44 m/s), reflejo de la cola larga hacia la derecha: la mayoría de las velocidades se ubica entre 2 y 7 m/s, pero ocasionalmente se registran valores bastante mayores.
+
+## Teorema Central del Límite
+
+Con $X \sim \text{Weibull}(2.5, 0.2)$, $\mu \approx 4.4363$ y $\sigma^2 \approx 3.6036$, el TCL indica que la media de una muestra de tamaño $n$ satisface
+
+$$\bar{X}_n \approx N\left(4.4363,\ \frac{3.6036}{n}\right).$$
+
+Se generan 1000 medias muestrales para $n = 3, 8, 25$ y $80$. Para hacer más visible el efecto del TCL, se repite el experimento con $\text{Weibull}(0.7, 1)$, una distribución mucho más asimétrica.
+
+```{r}
+#| label: tcl-weibull
+#| fig-align: center
+#| fig-width: 10
+#| fig-height: 6.5
+
+set.seed(2026)
+
+n_tcl_w <- c(3, 8, 25, 80)
+k_tcl_w <- 1000
+
+casos_tcl <- list(c(a = 2.5, l = 0.2), c(a = 0.7, l = 1))
+
+medias_w <- do.call(rbind, lapply(casos_tcl, function(p) {
+  do.call(rbind, lapply(n_tcl_w, function(n) {
+    data.frame(media = replicate(k_tcl_w, mean(rweibull(n, shape = p[["a"]], scale = 1 / p[["l"]]))),
+               n = n, dist = paste0("Weibull(", p[["a"]], ", ", p[["l"]], ")"),
+               a = p[["a"]], l = p[["l"]])
+  }))
+}))
+medias_w$dist <- factor(medias_w$dist, levels = c("Weibull(2.5, 0.2)", "Weibull(0.7, 1)"))
+medias_w$n_lab <- factor(paste("n =", medias_w$n), levels = paste("n =", n_tcl_w))
+
+resumen_tcl_w <- medias_w %>%
+  group_by(dist, n) %>%
+  summarise(mu = caract_weibull(first(a), first(l))["Media"],
+            Media_obs = mean(media),
+            Var_teo = caract_weibull(first(a), first(l))["Varianza"] / first(n),
+            Var_obs = var(media),
+            .groups = "drop")
+
+kable(resumen_tcl_w, digits = 4,
+      caption = "Media y varianza de las medias muestrales",
+      col.names = c("Distribución", "n", "Media teórica", "Media observada",
+                    "Varianza teórica σ²/n", "Varianza observada")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+
+curvas_w <- do.call(rbind, lapply(split(medias_w, list(medias_w$dist, medias_w$n), drop = TRUE),
+  function(d) {
+    car <- caract_weibull(d$a[1], d$l[1])
+    xs <- seq(min(d$media), max(d$media), length.out = 300)
+    data.frame(x = xs, y = dnorm(xs, car["Media"], sqrt(car["Varianza"] / d$n[1])),
+               dist = d$dist[1], n_lab = d$n_lab[1])
+  }))
+
+ggplot(medias_w, aes(x = media)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30,
+                 fill = "#1BE7FF", color = "#0B3954", alpha = 0.8) +
+  geom_line(data = curvas_w, aes(x = x, y = y), color = "#FF5714", linewidth = 1.1) +
+  facet_wrap(~ dist + n_lab, scales = "free", ncol = 4) +
+  labs(title = "Medias muestrales de distribuciones Weibull",
+       subtitle = "Curva: N(μ, σ²/n)",
+       x = "Media muestral", y = "Densidad") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+En ambos casos la media de las medias coincide con $\mu$ y su varianza con $\sigma^2/n$. Para la $\text{Weibull}(2.5, 0.2)$, que es casi simétrica, las medias se ajustan a la normal desde $n = 8$; para la $\text{Weibull}(0.7, 1)$, muy asimétrica, la cola derecha todavía es evidente con $n = 3$ y $n = 8$, pero con $n = 80$ el histograma ya sigue la curva normal.
+
+```{r}
+#| label: tcl-weibull-qq
+#| fig-align: center
+#| fig-width: 10
+#| fig-height: 6
+
+ggplot(medias_w, aes(sample = media)) +
+  stat_qq(color = "#0B3954", alpha = 0.5, size = 0.9) +
+  stat_qq_line(color = "#FF5714", linewidth = 1) +
+  facet_wrap(~ dist + n_lab, scales = "free", ncol = 4) +
+  labs(title = "QQ-plots de las medias muestrales",
+       x = "Cuantiles teóricos", y = "Cuantiles muestrales") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+```
+
+Los QQ-plots confirman lo anterior: los puntos se alinean con la recta conforme aumenta $n$, más rápido en el caso casi simétrico que en el muy asimétrico, tal como establece el Teorema Central del Límite.
+
+<br>
+
+Referencia:
+
+- Rincón, Luis (2014). *Introducción a la Probabilidad*. Facultad de Ciencias, UNAM. Páginas 278-281.
