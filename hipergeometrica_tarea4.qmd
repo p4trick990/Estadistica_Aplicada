@@ -1,0 +1,396 @@
+---
+title: "Distribución Hipergeométrica"
+lang: es
+---
+
+```{=html}
+<style>
+main.content {
+text-align: justify}
+</style>
+```
+
+```{r}
+#| label: setup
+#| include: false
+library(tidyverse)
+library(kableExtra)
+library(gridExtra)
+```
+
+La **distribución hipergeométrica** modela extracciones **sin reemplazo** de una población finita. Supongamos una urna con $N$ objetos, de los cuales $K$ tienen cierta característica (por ejemplo, son rojos) y los $N-K$ restantes no la tienen. Si se extraen $n$ objetos al azar y sin devolverlos, la variable $X$ registra cuántos de los objetos extraídos tienen la característica. A diferencia de la binomial, los ensayos no son independientes, pues cada extracción modifica la composición de la urna.
+
+::: {#def-hipergeometrica}
+Se dice que una variable aleatoria $X$ tiene **distribución hipergeométrica** con parámetros $N$, $K$ y $n$ si su función de probabilidad es
+
+$$f(x) = \frac{\displaystyle\binom{K}{x}\binom{N-K}{n-x}}{\displaystyle\binom{N}{n}}, \qquad x = 0, 1, \ldots, n,$$
+
+donde se adopta la convención $\binom{a}{b} = 0$ si $b > a$. En este caso se escribe $X \sim \text{hipergeo}(N, K, n)$.
+:::
+
+El numerador cuenta las maneras de escoger $x$ objetos de los $K$ con la característica y $n-x$ de los $N-K$ sin ella; el denominador cuenta todas las muestras posibles de tamaño $n$.
+
+## Características de la Distribución Hipergeométrica
+
+**Parámetros**
+
+- $N$: tamaño de la población ($N = 1, 2, \ldots$)
+- $K$: número de objetos con la característica de interés ($K = 0, 1, \ldots, N$)
+- $n$: número de extracciones sin reemplazo ($n = 0, 1, \ldots, N$)
+
+**Parámetros Estadísticos**
+
+Esperanza (Media):
+
+$$E(X) = \frac{nK}{N}$$
+
+Varianza:
+
+$$\text{Var}(X) = n\,\frac{K}{N}\left(1-\frac{K}{N}\right)\frac{N-n}{N-1}$$
+
+Desviación estándar:
+
+$$\sigma = \sqrt{n\,\frac{K}{N}\left(1-\frac{K}{N}\right)\frac{N-n}{N-1}}$$
+
+El factor $\frac{N-n}{N-1}$ se conoce como factor de corrección por población finita; por ser menor que 1, la varianza es menor que la de una binomial con $p = K/N$.
+
+**Función de Distribución (Probabilidad Acumulada)**
+
+$$F(x) = P(X \leq x) = \sum_{i=0}^{\lfloor x \rfloor} \frac{\binom{K}{i}\binom{N-K}{n-i}}{\binom{N}{n}}$$
+
+En R, las funciones `dhyper(x, m, n, k)`, `phyper(q, m, n, k)` y `rhyper(nn, m, n, k)` usan la notación `m` $= K$, `n` $= N-K$ y `k` $= n$.
+
+## Ejemplo
+
+::: {#exm-urna}
+### Canicas rojas en una urna
+
+Una urna contiene 30 canicas, de las cuales 12 son rojas y 18 son azules. Se extraen 6 canicas sin reemplazo y se define $X$ como el número de canicas rojas obtenidas, de modo que $X \sim \text{hipergeo}(30, 12, 6)$.
+
+```{r}
+#| label: ejemplo-urna
+#| code-fold: true
+
+N_urna <- 30
+K_urna <- 12
+n_urna <- 6
+x_urna <- 0:n_urna
+
+tabla_urna <- data.frame(
+  x = x_urna,
+  fx = dhyper(x_urna, K_urna, N_urna - K_urna, n_urna),
+  Fx = phyper(x_urna, K_urna, N_urna - K_urna, n_urna)
+)
+
+kable(tabla_urna, digits = 4,
+      caption = "Distribución hipergeo(30, 12, 6)",
+      col.names = c("x", "P(X = x)", "P(X ≤ x)")) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+esp_urna <- n_urna * K_urna / N_urna
+var_urna <- n_urna * (K_urna / N_urna) * (1 - K_urna / N_urna) *
+  (N_urna - n_urna) / (N_urna - 1)
+
+cat("Esperanza:", esp_urna, "\n")
+cat("Varianza:", round(var_urna, 4), "\n")
+cat("Desviación estándar:", round(sqrt(var_urna), 4), "\n")
+```
+
+```{r}
+#| label: grafico-urna
+#| code-fold: true
+#| fig-align: center
+#| fig-width: 10
+#| fig-height: 4.5
+
+g_urna_f <- ggplot(tabla_urna, aes(x = x, y = fx)) +
+  geom_col(fill = "#FF5714", width = 0.65) +
+  geom_text(aes(label = round(fx, 3)), vjust = -0.4, size = 3.5, color = "#0B3954") +
+  geom_vline(xintercept = esp_urna, color = "#0B3954", linetype = "dashed", linewidth = 1) +
+  scale_x_continuous(breaks = x_urna) +
+  labs(title = "Función de probabilidad",
+       subtitle = "Línea punteada: E(X) = 2.4",
+       x = "Canicas rojas extraídas",
+       y = "P(X = x)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+
+g_urna_F <- ggplot(tabla_urna, aes(x = x, y = Fx)) +
+  geom_step(color = "#0B3954", linewidth = 1.1) +
+  geom_point(color = "#FF5714", size = 2.5) +
+  scale_x_continuous(breaks = x_urna) +
+  labs(title = "Función de distribución",
+       subtitle = "hipergeo(30, 12, 6)",
+       x = "Canicas rojas extraídas",
+       y = "P(X ≤ x)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+
+grid.arrange(g_urna_f, g_urna_F, ncol = 2)
+```
+
+Los valores más probables son 2 y 3 canicas rojas, alrededor de la media 2.4; obtener las 6 rojas es casi imposible.
+:::
+
+## Comparación: Efecto de los Parámetros
+
+### Efecto de $K$ (fijos $N = 40$ y $n = 12$)
+
+```{r}
+#| label: efecto-K
+#| code-fold: true
+#| fig-align: center
+
+N_k <- 40
+n_k <- 12
+K_vals <- c(4, 12, 24, 34)
+
+datos_K <- map_dfr(K_vals, function(K) {
+  data.frame(
+    x = 0:n_k,
+    prob = dhyper(0:n_k, K, N_k - K, n_k),
+    K = paste("K =", K)
+  )
+})
+datos_K$K <- factor(datos_K$K, levels = paste("K =", K_vals))
+
+ggplot(datos_K, aes(x = x, y = prob, fill = K)) +
+  geom_col(width = 0.75, show.legend = FALSE) +
+  scale_fill_manual(values = c("#1BE7FF", "#6EEB83", "#FF5714", "#0B3954")) +
+  scale_x_continuous(breaks = 0:n_k) +
+  facet_wrap(~K) +
+  labs(title = "Efecto de K (N = 40, n = 12)",
+       x = "x",
+       y = "Probabilidad") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+```
+
+Al aumentar $K$ crece la proporción de objetos con la característica, por lo que la distribución se desplaza hacia valores mayores.
+
+### Efecto de $n$ (fijos $N = 40$ y $K = 16$)
+
+```{r}
+#| label: efecto-n
+#| code-fold: true
+#| fig-align: center
+
+K_n <- 16
+n_vals <- c(4, 10, 20, 32)
+
+datos_n <- map_dfr(n_vals, function(n) {
+  data.frame(
+    x = 0:n,
+    prob = dhyper(0:n, K_n, N_k - K_n, n),
+    n = paste("n =", n)
+  )
+})
+datos_n$n <- factor(datos_n$n, levels = paste("n =", n_vals))
+
+ggplot(datos_n, aes(x = x, y = prob, fill = n)) +
+  geom_col(width = 0.75, show.legend = FALSE) +
+  scale_fill_manual(values = c("#1BE7FF", "#6EEB83", "#FF5714", "#0B3954")) +
+  facet_wrap(~n, scales = "free") +
+  labs(title = "Efecto de n (N = 40, K = 16)",
+       x = "x",
+       y = "Probabilidad") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+```
+
+Con más extracciones aumenta el número esperado de éxitos; cuando $n$ se acerca a $N$, la variabilidad vuelve a reducirse porque casi toda la urna queda en la muestra.
+
+### Efecto de $N$ (fijos $K = 8$ y $n = 8$)
+
+```{r}
+#| label: efecto-N
+#| code-fold: true
+#| fig-align: center
+
+K_N <- 8
+n_N <- 8
+N_vals <- c(16, 24, 40, 80)
+
+datos_N <- map_dfr(N_vals, function(N) {
+  data.frame(
+    x = 0:n_N,
+    prob = dhyper(0:n_N, K_N, N - K_N, n_N),
+    N = paste("N =", N)
+  )
+})
+datos_N$N <- factor(datos_N$N, levels = paste("N =", N_vals))
+
+ggplot(datos_N, aes(x = x, y = prob, fill = N)) +
+  geom_col(width = 0.75, show.legend = FALSE) +
+  scale_fill_manual(values = c("#1BE7FF", "#6EEB83", "#FF5714", "#0B3954")) +
+  scale_x_continuous(breaks = 0:n_N) +
+  facet_wrap(~N) +
+  labs(title = "Efecto de N (K = 8, n = 8)",
+       x = "x",
+       y = "Probabilidad") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+```
+
+Si la población crece y $K$ se mantiene, la proporción $K/N$ disminuye y la distribución se concentra en valores pequeños.
+
+### Media y varianza para distintos parámetros
+
+```{r}
+#| label: tabla-parametros
+#| code-fold: true
+
+param_hiper <- tibble(
+  N = c(40, 40, 40, 40, 40, 80),
+  K = c(4, 24, 16, 16, 16, 8),
+  n = c(12, 12, 4, 20, 32, 8)
+) %>%
+  mutate(
+    Media = n * K / N,
+    Varianza = n * (K / N) * (1 - K / N) * (N - n) / (N - 1),
+    Desv_Std = sqrt(Varianza)
+  )
+
+kable(param_hiper, digits = 4,
+      caption = "Esperanza y varianza de la distribución hipergeométrica",
+      col.names = c("N", "K", "n", "Media", "Varianza", "Desv. Estándar")) %>%
+  kable_styling(bootstrap_options = "striped")
+```
+
+La esperanza depende únicamente de $n$ y de la proporción $K/N$, mientras que la varianza también incorpora el factor de corrección $\frac{N-n}{N-1}$.
+
+## Simulación de Valores y Comparación con la Teórica
+
+Sea $X \sim \text{hipergeo}(N = 60, K = 24, n = 12)$. Sus parámetros teóricos son
+
+$$E(X) = \frac{12 \cdot 24}{60} = 4.8, \qquad \text{Var}(X) = 12 \cdot 0.4 \cdot 0.6 \cdot \frac{48}{59} \approx 2.3431$$
+
+Se simulan 10,000 valores de $X$ y se comparan con los teóricos.
+
+```{r}
+#| label: simulacion-hiper
+#| code-fold: true
+
+set.seed(2026)
+
+N_s <- 60
+K_s <- 24
+n_s <- 12
+reps_s <- 10000
+
+valores_s <- rhyper(reps_s, K_s, N_s - K_s, n_s)
+
+esp_s <- n_s * K_s / N_s
+var_s <- n_s * (K_s / N_s) * (1 - K_s / N_s) * (N_s - n_s) / (N_s - 1)
+
+data.frame(
+  Medida = c("Media", "Varianza", "Desv. Estándar"),
+  Teorica = c(esp_s, var_s, sqrt(var_s)),
+  Simulada = c(mean(valores_s), var(valores_s), sd(valores_s))
+) %>%
+  kable(digits = 4,
+        caption = "hipergeo(60, 24, 12): valores teóricos vs simulados",
+        col.names = c("Medida", "Teórica", "Simulada")) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+```
+
+```{r}
+#| label: grafico-simulacion
+#| code-fold: true
+#| fig-align: center
+
+soporte_s <- 0:n_s
+
+comp_s <- data.frame(
+  x = soporte_s,
+  Simulada = as.numeric(table(factor(valores_s, levels = soporte_s))) / reps_s,
+  Teorica = dhyper(soporte_s, K_s, N_s - K_s, n_s)
+)
+
+ggplot(comp_s, aes(x = x)) +
+  geom_col(aes(y = Simulada), fill = "#FFD23F", color = "#0B3954", width = 0.7) +
+  geom_point(aes(y = Teorica), color = "#FF5714", size = 3.5) +
+  geom_line(aes(y = Teorica), color = "#FF5714", linewidth = 0.8) +
+  scale_x_continuous(breaks = soporte_s) +
+  labs(title = "hipergeo(60, 24, 12): simulada vs teórica",
+       subtitle = "Barras: 10,000 simulaciones | Puntos: f(x) teórica",
+       x = "x",
+       y = "Frecuencia relativa / Probabilidad") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+Las estadísticas simuladas coinciden con las teóricas y las frecuencias relativas siguen de cerca a la función de probabilidad.
+
+## Teorema Central del Límite
+
+Se generan $k = 1000$ muestras de tamaño $30$ de $X \sim \text{hipergeo}(60, 24, 12)$. Como $\mu = 4.8$ y $\sigma^2 \approx 2.3431$, el TCL indica que
+
+$$\bar{X}_{30} \sim N\left(4.8,\ \frac{2.3431}{30}\right) \approx N(4.8,\ 0.0781)$$
+
+```{r}
+#| label: tcl-hiper
+#| code-fold: true
+#| fig-align: center
+
+set.seed(2026)
+
+k_tcl <- 1000
+n_tcl <- 30
+
+medias_h <- replicate(k_tcl, mean(rhyper(n_tcl, K_s, N_s - K_s, n_s)))
+var_media_h <- var_s / n_tcl
+
+data.frame(
+  Medida = c("Media", "Varianza"),
+  Teorico = c(esp_s, var_media_h),
+  Observado = c(mean(medias_h), var(medias_h))
+) %>%
+  kable(digits = 4, col.names = c("Medida", "Teórico", "Observado")) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+ggplot(data.frame(medias = medias_h), aes(x = medias)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 25,
+                 fill = "#FFD23F", color = "#0B3954") +
+  stat_function(fun = dnorm, args = list(mean = esp_s, sd = sqrt(var_media_h)),
+                color = "#FF5714", linewidth = 1.3) +
+  geom_vline(xintercept = mean(medias_h), color = "#0B3954",
+             linetype = "dashed", linewidth = 1) +
+  labs(title = "Medias muestrales de una hipergeo(60, 24, 12)",
+       subtitle = "Curva: N(4.8, 0.0781) | Línea punteada: media observada",
+       x = "Media muestral",
+       y = "Densidad") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+El histograma de las medias tiene forma de campana centrada en 4.8 y se ajusta a la curva normal teórica.
+
+```{r}
+#| label: qq-hiper
+#| code-fold: true
+#| fig-align: center
+#| fig-width: 6
+#| fig-height: 5
+
+ggplot(data.frame(medias = medias_h), aes(sample = medias)) +
+  stat_qq(color = "#0B3954", alpha = 0.6) +
+  stat_qq_line(color = "#FF5714", linewidth = 1) +
+  labs(title = "QQ-plot de las medias muestrales",
+       x = "Cuantiles teóricos",
+       y = "Cuantiles muestrales") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+```
+
+Los puntos se alinean con la recta, lo que confirma que las medias muestrales se comportan como una normal, como establece el TCL.
+
+<br>
+
+Referencia:
+
+- Rincón, Luis (2014). *Introducción a la Probabilidad*. Facultad de Ciencias, UNAM. Páginas 243-247.
